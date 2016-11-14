@@ -6,7 +6,7 @@
 library(plyr)
 library(data.table)
 
-##CLEANING LANGUAGE FUNCTIONS
+##CLEANING LANGUAGE FUNCTIONS----------------------------------------------------------------
 clean_type <- function(x)
   ifelse (x == "PRIJEM" , "CREDIT",
           ifelse(x == "VYDAJ", "WITHDRAWAL", "NA" ))
@@ -32,9 +32,17 @@ clean_frequency <- function(x)
           ifelse(x == "POPLATEK TYDNE", "WEEKLY", 
                  ifelse(x =="POPLATEK PO OBRATU", "TRANSACTION", "NA")))
 
+##FUNCTION FOR COUNTING DAYS SINCE LAST TRANSACTION
 
-##Scenario for SARS according to FFIEC for flagging suspicious activity
-naive_SARS<- function (id, amount, last_trans)
+days = function (x)
+{
+  y= sapply(1:length(x),function(i){ifelse(i==1 || x[i-1]>x[i] , 0, x[i]-x[i-1])})
+  return(y)
+}
+
+##FUNCTIONS FOR SCENARIO FLAGGING OF AML-----------------------------------------------------------
+
+naive_SARS<- function (id, amount, last_trans)#SARS based on transaction
 {
   y= sapply(1:length(id), function(i) {ifelse(amount[i] >= 5000, 1,
                                               ifelse(amount[i] >=25000, 1, 
@@ -42,14 +50,14 @@ naive_SARS<- function (id, amount, last_trans)
   return(y)
 }
 
-SARS_type_trans<-function (flag, operation)
+SARS_type_trans<-function (flag, operation)#SARS based on type of transaction
 {
   y= sapply(1:length(flag), function(i) {ifelse( flag[i] == 0, 0, 
                                                ifelse(operation [i] == "NA" || operation[i] == "WITHDRAWAL_CASH", 1,0))})
   return(y)
 }
 
-SARS_socio_economic<- function (flag, id, crimes, unemp)
+SARS_socio_economic<- function (flag, id, crimes, unemp)#SARS based on socio_economic
 {
   y= sapply(1:length(id), function(i) {ifelse( flag[i] == 0, 0, 
                                                ifelse(crimes [i] >= 6132, 1,
@@ -58,12 +66,7 @@ SARS_socio_economic<- function (flag, id, crimes, unemp)
 }
 
 
-days = function (x)
-{
-  y= sapply(1:length(x),function(i){ifelse(i==1 || x[i-1]>x[i] , 0, x[i]-x[i-1])})
-  return(y)
-}
-
+##RUNNING CODE-------------------------------------------------------------------------------------
 
 #Creating a merged table of relevant variables
 setnames(district, old = c("A1", "A11", "A12", "A13", "A14", "A15", "A16"), new = c("district_id", "AVG_SALARY", "UNEMP_95", "UNEMP_96", "ENTR", "CRIMES_95", "CRIMES_96"))
@@ -111,9 +114,12 @@ fit <- rpart(SARS_layer3 ~ + amount +AVG_SALARY +UNEMP_96 +ENTR +CRIMES_96 +last
 rpart.plot(fit)
 text(fit, use.n = TRUE)
 
+#Recursive partioning with anomaly detection
+
 fit2 <- rpart(predicted_anomaly ~ + amount +AVG_SALARY +UNEMP_96 +ENTR +CRIMES_96 +last_trans, data = output, control=list(minsplit=5))
 rpart.plot(fit2)
 text(fit2, use.n = TRUE)
 
+#Trying to create predictions/not yet complete JH 11/14/16
 pred<- prediction(predict(fit, type= "prob")[,2],
                   dt_all_transactions$SARS_layer3)
