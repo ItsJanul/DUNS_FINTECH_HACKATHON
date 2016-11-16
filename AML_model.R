@@ -35,25 +35,38 @@ clean_frequency <- function(x)
 ##FUNCTION FOR COUNTING DAYS SINCE LAST TRANSACTION
 
 days = function (x)
+  #this days function works but very slowly, have not found a better vectorized alternative-JH 11-16-16
 {
   y= sapply(1:length(x),function(i){ifelse(i==1 || x[i-1]>x[i] , 0, x[i]-x[i-1])})
   return(y)
 }
 
+shift <- function(x, lag) 
+  #this function shifts any vector ahead by lag
+{
+  n <- length(x)
+  xnew <- rep(NA, n)
+  xnew <- as.Date(xnew)
+  xnew[(lag+1):n] <- x[1:(n-lag)]
+  return(xnew)
+}
+
 ##FUNCTIONS FOR SCENARIO FLAGGING OF AML-----------------------------------------------------------
 
-naive_SARS<- function (id, amount, last_trans)#SARS based on transaction
+naive_SARS<- function (id, amount, last_trans)
+  #SARS based on transaction
 {
-  y= sapply(1:length(id), function(i) {ifelse(amount[i] >= 5000, 1,
-                                              ifelse(amount[i] >=25000, 1, 
-                                                     ifelse(last_trans[i] <=15 && amount[i]+amount[i-1] >5000, 1, 0)))})
+  y= sapply(1:length(id), function(i) {ifelse(amount[i] >=25000, 1, 
+                                              ifelse(amount[i] >= 5000, 1,
+                                                     ifelse(last_trans[i] <=15 && amount[i]+amount[i-1] >= 5000, 1, 0)))})
   return(y)
 }
 
-SARS_type_trans<-function (flag, operation)#SARS based on type of transaction
+SARS_type_trans<-function (flag, operation)
+  #SARS based on type of transaction
 {
   y= sapply(1:length(flag), function(i) {ifelse( flag[i] == 0, 0, 
-                                               ifelse(operation [i] == "NA" || operation[i] == "WITHDRAWAL_CASH", 1,0))})
+                                                 ifelse(is.na(operation [i]) || operation[i] == "WITHDRAWAL_CASH", 1,0))})
   return(y)
 }
 
@@ -65,8 +78,12 @@ SARS_socio_economic<- function (flag, id, crimes, unemp)#SARS based on socio_eco
   return(y)
 }
 
+#Trying to add threat classifiers------------------------------------
+#merged_table$threat<- ifelse(merged_table$threat==0, "LOW RISK", 
+#                             ifelse(merged_table$threat==1, "MEDIUM RISK", 
+#                                    ifelse(merged_table$threat==2, "HIGH RISK", "HIGH-HIGH RISK")))
 
-##RUNNING CODE-------------------------------------------------------------------------------------
+##CLEANING DATA-------------------------------------------------------------------------------------
 
 #Creating a merged table of relevant variables
 setnames(district, old = c("A1", "A11", "A12", "A13", "A14", "A15", "A16"), new = c("district_id", "AVG_SALARY", "UNEMP_95", "UNEMP_96", "ENTR", "CRIMES_95", "CRIMES_96"))
@@ -85,41 +102,51 @@ merged_table$frequency <- clean_frequency(merged_table$frequency)
 merged_table$trans_date= paste("19", merged_table$trans_date, sep="")
 merged_table$trans_date= as.Date(as.character(merged_table$trans_date), format='%Y%m%d')
 
-#Setting transactions in order to create transaction #
+#Setting transactions in order to create transaction dates
 merged_table <- with(merged_table,merged_table[order(account_id,trans_date),])
-merged_table$last_trans <- days(merged_table$trans_date)
 
-#In between cleaning data I merged df to a dt called "dt_all_transactions" 
+#Adding vector for date of last trans and cumulative time since last trans
+merged_table$last_trans_date<- shift(merged_table$trans_date, 1)
+merged_table$time_between_trans<- merged_table$trans_date-merged_table$last_trans_date
+merged_table$time_between_trans<- ifelse(merged_table$time_between_trans < 0, 0, merged_table$time_between_trans)
 
 #layer1 SARS
-dt_all_transactions$SARS_layer1 <- naive_SARS(dt_all_transactions$account_id,dt_all_transactions$amount, dt_all_transactions$last_trans)
+merged_table$SARS_layer1 <- naive_SARS(merged_table$account_id,merged_table$amount, merged_table$time_between_tran)
 
-#layer2 SARS
-dt_all_transactions$SARS_layer2 <- SARS_type_trans(dt_all_transactions$SARS_layer1, dt_all_transactions$operation)
+#Classifier level 1
+merged_table$classifier_level1 <- SARS_type_trans(merged_table$SARS_layer1, merged_table$operation)
 
-#layer3 SARS
-dt_all_transactions$SARS_layer3<- SARS_socio_economic(dt_all_transactions$SARS_layer2, dt_all_transactions$account_id,
-                                                      dt_all_transactions$CRIMES_96, dt_all_transactions$UNEMP_96)
+#Classifier level 2
+merged_table$classifier_level2<- SARS_socio_economic(merged_table$classifier_level1, merged_table$account_id,
+                                               merged_table$CRIMES_96, merged_table$UNEMP_96)
 
-#VISUALIZING DATA
-
-#histogram of transaction amount vs count
-plot_amount_hist = ggplot(dt_all_transactions, aes(x=amount)) + geom_histogram()
-
-#Recursive partioning
+#Creating decision trees via CART------------------------------------
 
 library(rpart)
 library(rpart.plot)
-fit <- rpart(SARS_layer3 ~ + amount +AVG_SALARY +UNEMP_96 +ENTR +CRIMES_96 +last_trans, data = dt_all_transactions, control=list(minsplit=5))
-rpart.plot(fit)
-text(fit, use.n = TRUE)
 
-#Recursive partioning with anomaly detection
+#splitting subset by date--------------------------------------------
 
-fit2 <- rpart(predicted_anomaly ~ + amount +AVG_SALARY +UNEMP_96 +ENTR +CRIMES_96 +last_trans, data = output, control=list(minsplit=5))
-rpart.plot(fit2)
-text(fit2, use.n = TRUE)
+training_data<-subset(merged_table, trans_date <= as.Date("1998-01-01"))
+test_data<-subset(merged_table, trans_date > as.Date("1998-01-01"))
 
-#Trying to create predictions/not yet complete JH 11/14/16
-pred<- prediction(predict(fit, type= "prob")[,2],
-                  dt_all_transactions$SARS_layer3)
+#Naive model---------------------------------------------------------
+naive_model <- rpart(SARS_layer1~ +amount +time_between_trans, data = training_data,  
+                  control=list(minsplit=5))
+naive_model.plot<- rpart.plot(naive_model)
+
+
+#Recursive partioning------------------------------------------------
+ML_model <- rpart(classifier_level2~ +amount +AVG_SALARY +UNEMP_96 +ENTR +CRIMES_96 +time_between_trans, data = training_data,  
+                  control=list(minsplit=5))
+ML_model.plot<- rpart.plot(ML_model)
+
+#Trying to create predictions not sure how to work this quite yet JH 11-16-16
+library("ROCR")
+pred <- predict(naive_model, data = test_data)
+pred2<- predict(ML_model, data = test_data)
+
+#VISUALIZING DATA-------------------------------------------------------
+
+#histogram of transaction amount vs count
+plot_amount_hist = ggplot(dt_all_transactions, aes(x=amount)) + geom_histogram()
