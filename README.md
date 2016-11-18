@@ -24,4 +24,4 @@ Relations within the accounts:
 ##Important links
 - You can find the datasets [here] (http://lisp.vse.cz/pkdd99/berka.htm) 
 - You can find our proto.io [here] (https://pr.to/HLERWZ/)
-- You can find my twitter [here] for any suggestions! (https://twitter.com/itsjanul)
+- You can find my twitter [here] (https://twitter.com/itsjanul)for any suggestions! 
