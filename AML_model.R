@@ -145,14 +145,20 @@ pred<- prediction(predict(ML_model,test_data), test_data$classifier_level2)
 plot(performance(pred, "tpr", "fpr"))
 abline(0, 1, lty = 2)
 
+auc.perf = performance(pred, measure = "auc")
+auc.perf@y.values
+
 pred2<- prediction(predict(naive_model,test_data), test_data$classifier_level2)
 plot(performance(pred2, "tpr", "fpr"))
 abline(0, 1, lty = 2)
+
+auc.perf2 = performance(pred2, measure = "auc")
+auc.perf2@y.values
 
 
 #VISUALIZING DATA-------------------------------------------------------
 
 #histogram of transaction amount vs count
 plot_amount_hist = ggplot(training_data, aes(x=amount)) + geom_histogram()
-sankeytree(ML_model, name="ML Model", childrenName = c("test1", "test2", "test3"), maxLabelLength = 10, nodeHeight = 100)
+sankeytree(ML_model, name="ML Model", maxLabelLength = 10, nodeHeight = 100)
 
