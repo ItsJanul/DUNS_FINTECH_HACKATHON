@@ -5,6 +5,10 @@
 
 library(plyr)
 library(data.table)
+library(rpart)
+library(rpart.plot)
+library("ROCR")
+library("ggplot2")
 
 ##CLEANING LANGUAGE FUNCTIONS----------------------------------------------------------------
 clean_type <- function(x)
@@ -120,21 +124,16 @@ merged_table$classifier_level1 <- SARS_type_trans(merged_table$SARS_layer1, merg
 merged_table$classifier_level2<- SARS_socio_economic(merged_table$classifier_level1, merged_table$account_id,
                                                merged_table$CRIMES_96, merged_table$UNEMP_96)
 
-#Creating decision trees via CART------------------------------------
-
-library(rpart)
-library(rpart.plot)
-
 #splitting subset by date--------------------------------------------
 
 training_data<-subset(merged_table, trans_date <= as.Date("1998-01-01"))
 test_data<-subset(merged_table, trans_date > as.Date("1998-01-01"))
+flagged<-subset(test_data, classifier_level2==1)
 
 #Naive model---------------------------------------------------------
 naive_model <- rpart(SARS_layer1~ +amount +time_between_trans, data = training_data,  
                   control=list(minsplit=5))
 naive_model.plot<- rpart.plot(naive_model)
-
 
 #Recursive partioning------------------------------------------------
 ML_model <- rpart(classifier_level2~ +amount +AVG_SALARY +UNEMP_96 +ENTR +CRIMES_96 +time_between_trans, data = training_data,  
@@ -142,11 +141,18 @@ ML_model <- rpart(classifier_level2~ +amount +AVG_SALARY +UNEMP_96 +ENTR +CRIMES
 ML_model.plot<- rpart.plot(ML_model)
 
 #Trying to create predictions not sure how to work this quite yet JH 11-16-16
-library("ROCR")
-pred <- predict(naive_model, data = test_data)
-pred2<- predict(ML_model, data = test_data)
+pred<- prediction(predict(ML_model,test_data), test_data$classifier_level2)
+plot(performance(pred, "tpr", "fpr"))
+abline(0, 1, lty = 2)
+
+pred2<- prediction(predict(naive_model,test_data), test_data$classifier_level2)
+plot(performance(pred2, "tpr", "fpr"))
+abline(0, 1, lty = 2)
+
 
 #VISUALIZING DATA-------------------------------------------------------
 
 #histogram of transaction amount vs count
-plot_amount_hist = ggplot(dt_all_transactions, aes(x=amount)) + geom_histogram()
+plot_amount_hist = ggplot(training_data, aes(x=amount)) + geom_histogram()
+sankeytree(ML_model, name="ML Model", childrenName = c("test1", "test2", "test3"), maxLabelLength = 10, nodeHeight = 100)
+
