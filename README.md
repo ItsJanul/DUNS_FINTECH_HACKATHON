@@ -1,11 +1,11 @@
 # DUNS_FINTECH_HACKATHON
-##Cornell Fintech Hackathon 2016- Team DUNS
+## Cornell Fintech Hackathon 2016- Team DUNS
 
 
-This is the machine learning model and presentation that won runner up at [Cornell Tech's 2016 Fintech Hackathon] (https://fintechhackathon2016.splashthat.com/)
+This is the machine learning model and presentation that won runner up at [Cornell Tech's 2016 Fintech Hackathon](https://fintechhackathon2016.splashthat.com/)
 
 
-##Data
+## Data
 We based our dataset on PKDD'99 Discovery Challenge data set.
 
 Relations within the accounts:
@@ -18,10 +18,10 @@ Relations within the accounts:
 - relation credit card (892 objects in the file CARD.ASC) - each record describes a credit card issued to an account,
 - relation demographic data (77 objects in the file DISTRICT.ASC) - each record describes demographic characteristics of a district.
 
-##We did not end up using all relations due to time constraints of the [Fintech Hackathon Challenge] (https://fintechhackathon2016.splashthat.com/)
+## We did not end up using all relations due to time constraints of the [Fintech Hackathon Challenge](https://fintechhackathon2016.splashthat.com/)
 
 
-##Important links
+## Important links
 - You can find the datasets [here] (http://lisp.vse.cz/pkdd99/berka.htm) 
 - You can find our proto.io [here] (https://pr.to/HLERWZ/)
 - You can find my twitter [here] (https://twitter.com/itsjanul) for any suggestions! 
